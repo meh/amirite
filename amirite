@@ -51,34 +51,21 @@ namespace ami
 			}
 		#endif
 
-		namespace _has_insertion_operator
+		template <typename Type>
+		struct has_cout
 		{
-			typedef char no[1];
-			typedef char yes[2];
+			template <typename U, std::ostream& (U::*)() const>
+			struct method
+			{};
 
-			struct any
-			{
-				template <typename T> any (T const&);
-			};
+			template <typename U>
+			static char test (method<U, &U::operator <<>*);
 
-			no& operator << (std::ostream const&, any const&);
+			template <typename U>
+			static int test (...);
 
-			yes& test (std::ostream&);
-			no&  test (no&);
-
-			template <typename Type>
-			struct has_insertion_operator
-			{
-				static std::ostream& s;
-				static Type const& t;
-				static bool const value = sizeof(test(s << t)) == sizeof(yes);
-			};
-		}
-
-		template<typename T>
-		struct has_insertion_operator :
-			_has_insertion_operator::has_insertion_operator<T>
-		{};
+			static const bool value = sizeof(test<Type>(0)) == sizeof(char);
+		};
 
 		template <typename Type>
 		struct has_to_string
@@ -118,7 +105,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_enum<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+			std::is_enum<Type>::value && has_cout<Type>::value, std::string>::type
 		value (Type value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -129,7 +116,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_enum<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+			std::is_enum<Type>::value && !has_cout<Type>::value, std::string>::type
 		value (Type value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -141,7 +128,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_union<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+			std::is_union<Type>::value && has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -152,7 +139,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_union<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+			std::is_union<Type>::value && !has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -163,7 +150,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_class<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+			std::is_class<Type>::value && has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -174,7 +161,7 @@ namespace ami
 
 		template <typename Type>
 		typename std::enable_if<
-			std::is_class<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+			std::is_class<Type>::value && !has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -195,16 +182,15 @@ namespace ami
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
+
 			ss << "[";
+			for (unsigned i = 0; i < std::extent<Type>::value; i++) {
+				ss << stringify::value(value[i]);
 
-			for (int i = 0; i < std::extent<Type>::value; i++) {
-				ss << value(value[i]);
-
-				if (i != std::extent<Type>::value - 1) {
+				if (i < std::extent<Type>::value - 1) {
 					ss << ", ";
 				}
 			}
-
 			ss << "]";
 
 			return ss.str();
