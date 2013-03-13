@@ -491,7 +491,7 @@ namespace ami
 		try {
 			check();
 
-			fail("expected " + stringify::type<Exception>() + " to be thrown but nothing was");
+			fail("expected " + stringify::type<Exception>() + " to be thrown, but nothing was");
 		}
 		catch (std::exception& e) {
 			if (dynamic_cast<Exception*>(e) == nullptr) {
