@@ -88,7 +88,9 @@ namespace ami
 			typedef char yes[2];
 
 			template <typename C>
-			static yes& test (decltype(&C::to_string));
+			static typename std::enable_if<std::is_same<decltype(&C::to_string),
+			                               std::string(C::*)(void)>::value, yes&>::type
+			test (decltype(&C::to_string));
 
 			template <typename C>
 			static no& test (...);
