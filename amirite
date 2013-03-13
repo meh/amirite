@@ -26,30 +26,31 @@ namespace ami
 {
 	namespace stringify
 	{
-		#ifndef NO_DEMANGLE
-			#include <cxxabi.h>
+#	ifndef NO_DEMANGLE
+#		include <cxxabi.h>
 
-			template <typename Type>
-			std::string
-			type (void)
-			{
-				std::string result;
-				int         status;
-				char*       demangled = abi::__cxa_demangle(typeid(Type).name(), nullptr, nullptr, &status);
+		template <typename Type>
+		std::string
+		type (void)
+		{
+			std::string result;
+			int         status;
+			char*       demangled = abi::__cxa_demangle(typeid(Type).name(),
+			                                              nullptr, nullptr, &status);
 
-				result = demangled;
-				free(demangled);
+			result = demangled;
+			free(demangled);
 
-				return result;
-			}
-		#else
-			template <typename Type>
-			std::string
-			type (void)
-			{
-				return typeid(Type).name();
-			}
-		#endif
+			return result;
+		}
+#	else
+		template <typename Type>
+		std::string
+		type (void)
+		{
+			return typeid(Type).name();
+		}
+#	endif
 
 		template <typename Type>
 		struct has_cout
@@ -84,6 +85,41 @@ namespace ami
 		};
 
 		template <typename Type>
+		struct is_string
+		{
+			static const bool value = std::is_same<Type, std::string>::value ||
+			                          std::is_same<Type, std::wstring>::value ||
+			                          std::is_same<Type, std::u16string>::value ||
+			                          std::is_same<Type, std::u32string>::value;
+		};
+
+		template <typename Type>
+		struct is_raw_string
+		{
+			static const bool value = (std::is_array<Type>::value &&
+				std::is_same<typename std::remove_const<
+					typename std::remove_extent<Type>::type>::type, char>::value) ||
+
+				(std::is_pointer<Type>::value &&
+					std::is_same<typename std::remove_const<
+						typename std::remove_pointer<Type>::type>::type, char>::value);
+		};
+
+		template <typename Type>
+		typename std::enable_if<is_string<Type>::value, Type>::type
+		value (Type& value)
+		{
+			return value;
+		}
+
+		template <typename Type>
+		typename std::enable_if<is_raw_string<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			return value;
+		}
+
+		template <typename Type>
 		typename std::enable_if<std::is_fundamental<Type>::value, std::string>::type
 		value (Type value)
 		{
@@ -94,7 +130,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<std::is_pointer<Type>::value, std::string>::type
+		typename std::enable_if<!is_raw_string<Type>::value &&
+			std::is_pointer<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -104,8 +141,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
-			std::is_enum<Type>::value && has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_enum<Type>::value &&
+			has_cout<Type>::value, std::string>::type
 		value (Type value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -115,8 +152,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
-			std::is_enum<Type>::value && !has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_enum<Type>::value &&
+			!has_cout<Type>::value, std::string>::type
 		value (Type value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -127,8 +164,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
-			std::is_union<Type>::value && has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_union<Type>::value &&
+			has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -138,8 +175,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
-			std::is_union<Type>::value && !has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_union<Type>::value &&
+			!has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -149,7 +186,7 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
+		typename std::enable_if<!is_string<Type>::value &&
 			std::is_class<Type>::value && has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
@@ -160,7 +197,7 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<
+		typename std::enable_if<!is_string<Type>::value &&
 			std::is_class<Type>::value && !has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
@@ -178,7 +215,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<std::is_array<Type>::value, std::string>::type
+		typename std::enable_if<!is_raw_string<Type>::value &&
+			std::is_array<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
