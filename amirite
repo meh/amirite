@@ -256,31 +256,55 @@ namespace ami
 	class test
 	{
 		public:
-			class success : public std::runtime_error
+			class exception : public std::runtime_error
 			{
 				public:
-					success (void) : std::runtime_error("test passed") { }
+					explicit exception (void) : std::runtime_error("test passed") { }
 
-					explicit success (const std::string& what_arg) : std::runtime_error(what_arg) { }
-					explicit success (const char* what_arg) : std::runtime_error(what_arg) { }
+					explicit exception (std::string const& what_arg) : std::runtime_error(what_arg) { }
+					explicit exception (char const* what_arg) : std::runtime_error(what_arg) { }
+
+					explicit exception (std::string const& what_arg, std::string const& info) : std::runtime_error(what_arg)
+					{
+						_info = info;
+					}
+
+					std::string
+					info (void)
+					{
+						return _info;
+					}
+
+				private:
+					std::string _info;
+
 			};
 
-			class failure : public std::runtime_error
+			class success : public exception
 			{
 				public:
-					failure (void) : std::runtime_error("test failed") { }
-
-					explicit failure (const std::string& what_arg) : std::runtime_error(what_arg) { }
-					explicit failure (const char* what_arg) : std::runtime_error(what_arg) { }
+					explicit success (void) : exception("test passed") { }
+					explicit success (std::string const& what_arg) : exception(what_arg) { }
+					explicit success (char const* what_arg) : exception(what_arg) { }
+					explicit success (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
 			};
 
-			class skip : public std::runtime_error
+			class failure : public exception
 			{
 				public:
-					skip (void) : std::runtime_error("test skipped") { }
+					explicit failure (void) : exception("test passed") { }
+					explicit failure (std::string const& what_arg) : exception(what_arg) { }
+					explicit failure (char const* what_arg) : exception(what_arg) { }
+					explicit failure (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
+			};
 
-					explicit skip (const std::string& what_arg) : std::runtime_error(what_arg) { }
-					explicit skip (const char* what_arg) : std::runtime_error(what_arg) { }
+			class skip : public exception
+			{
+				public:
+					explicit skip (void) : exception("test passed") { }
+					explicit skip (std::string const& what_arg) : exception(what_arg) { }
+					explicit skip (char const* what_arg) : exception(what_arg) { }
+					explicit skip (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
 			};
 
 		public:
@@ -309,6 +333,12 @@ namespace ami
 			message (void)
 			{
 				return _result ? _result->what() : "";
+			}
+
+			std::string
+			info (void)
+			{
+				return _result ? _result->info() : "";
 			}
 
 			bool
@@ -358,7 +388,7 @@ namespace ami
 			std::string               _name;
 			std::function<void(void)> _check;
 
-			std::runtime_error* _result;
+			exception* _result;
 	};
 
 	class suite
@@ -482,9 +512,9 @@ namespace ami
 	}
 
 	void
-	skip (std::string reason)
+	skip (std::string reason, std::string info = "")
 	{
-		throw test::skip(reason);
+		throw test::skip(reason, info);
 	}
 
 	void
@@ -494,9 +524,9 @@ namespace ami
 	}
 
 	void
-	fail (std::string reason)
+	fail (std::string reason, std::string info = "")
 	{
-		throw test::failure(reason);
+		throw test::failure(reason, info);
 	}
 
 	void
@@ -506,44 +536,44 @@ namespace ami
 	}
 
 	void
-	pass (std::string reason)
+	pass (std::string reason, std::string info = "")
 	{
-		throw test::success(reason);
+		throw test::success(reason, info);
 	}
 
 	template <typename Type>
 	void
-	truthy (Type value)
+	truthy (Type value, std::string info = "")
 	{
 		if (!value) {
-			fail("expected a truthy value, got " + stringify::value(value) + " instead");
+			fail("expected a truthy value, got " + stringify::value(value) + " instead", info);
 		}
 	}
 
 	template <typename Type>
 	void
-	falsy (Type value)
+	falsy (Type value, std::string info = "")
 	{
 		if (value) {
-			fail("expected a falsy value, got " + stringify::value(value) + " instead");
+			fail("expected a falsy value, got " + stringify::value(value) + " instead", info);
 		}
 	}
 
 	template <typename First, typename Second>
 	void
-	equal (First first, Second second)
+	equal (First first, Second second, std::string info = "")
 	{
 		if (first != second) {
-			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be equal");
+			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be equal", info);
 		}
 	}
 
 	template <typename First, typename Second>
 	void
-	different (First first, Second second)
+	different (First first, Second second, std::string info = "")
 	{
 		if (first == second) {
-			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be different");
+			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be different", info);
 		}
 	}
 
@@ -562,6 +592,23 @@ namespace ami
 			}
 		}
 	}
+
+	template <class Exception>
+	void
+	thrown (std::string info, std::function<void(void)> check)
+	{
+		try {
+			check();
+
+			fail("expected " + stringify::type<Exception>() + " to be thrown, but nothing was", info);
+		}
+		catch (std::exception& e) {
+			if (dynamic_cast<Exception*>(e) == nullptr) {
+				fail("expected " + stringify::type<Exception>() + " to be thrown, but something else was", info);
+			}
+		}
+	}
+
 }
 
 int
@@ -571,7 +618,15 @@ amirite (ami::suite suite)
 
 	for (auto& test : suite) {
 		if (test.failed()) {
-			std::cout << suite.name() << "/" << test.name() << ":" << std::endl;
+			std::cout << suite.name() << "/" << test.name() << ": ";
+
+			if (!test.info().empty()) {
+				std::cout << test.info() << std::endl;
+			}
+			else {
+				std::cout << std::endl;
+			}
+
 			std::cout << test.message() << std::endl;
 			std::cout << std::endl;
 		}
