@@ -539,7 +539,7 @@ namespace ami
 	}
 }
 
-void
+int
 amirite (ami::suite suite)
 {
 	suite.run();
@@ -551,17 +551,21 @@ amirite (ami::suite suite)
 			std::cout << std::endl;
 		}
 	}
+
+	return (suite.passed()) ? 0 : 1;
 }
 
-void
+int
 amirite (std::string name, std::map<std::string, std::function<void(void)>> tests)
 {
 	ami::suite suite(name, tests);
 
 	amirite(suite);
+
+	return (suite.passed()) ? 0 : 1;
 }
 
-void
+int
 amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::map<std::string, std::function<void(void)>> tests)
 {
 	ami::suite suite(tests);
@@ -573,9 +577,11 @@ amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)>
 	}
 
 	std::cout << std::endl;
+
+	return (suite.passed()) ? 0 : 1;
 }
 
-void
+int
 amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::string name, std::map<std::string, std::function<void(void)>> tests)
 {
 	ami::suite suite(name, tests);
@@ -587,6 +593,8 @@ amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)>
 	}
 
 	std::cout << std::endl;
+
+	return (suite.passed()) ? 0 : 1;
 }
 
 #endif
