@@ -1,0 +1,569 @@
+/*
+ *           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+ *                   Version 2, December 2004
+ *
+ *           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+ *  TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+ *
+ *  0. You just DO WHAT THE FUCK YOU WANT TO.
+ *********************************************************************/
+
+#ifndef _AMIRITE_H
+#define _AMIRITE_H
+
+#include <iostream>
+#include <sstream>
+#include <type_traits>
+#include <typeinfo>
+#include <map>
+#include <vector>
+#include <string>
+#include <functional>
+#include <algorithm>
+#include <stdexcept>
+
+namespace ami
+{
+	namespace stringify
+	{
+		#ifndef NO_DEMANGLE
+			#include <cxxabi.h>
+
+			template <typename Type>
+			std::string
+			type (void)
+			{
+				std::string result;
+				int         status;
+				char*       demangled = abi::__cxa_demangle(typeid(Type).name(), nullptr, nullptr, &status);
+
+				result = demangled;
+				free(demangled);
+
+				return result;
+			}
+		#else
+			template <typename Type>
+			std::string
+			type (void)
+			{
+				return typeid(Type).name();
+			}
+		#endif
+
+		namespace _has_insertion_operator
+		{
+			typedef char no[1];
+			typedef char yes[2];
+
+			struct any
+			{
+				template <typename T> any (T const&);
+			};
+
+			no& operator << (std::ostream const&, any const&);
+
+			yes& test (std::ostream&);
+			no&  test (no&);
+
+			template <typename Type>
+			struct has_insertion_operator
+			{
+				static std::ostream& s;
+				static Type const& t;
+				static bool const value = sizeof(test(s << t)) == sizeof(yes);
+			};
+		}
+
+		template<typename T>
+		struct has_insertion_operator :
+			_has_insertion_operator::has_insertion_operator<T>
+		{};
+
+		template <typename Type>
+		struct has_to_string
+		{
+			template <typename U, std::string (U::*)() const>
+			struct method
+			{};
+
+			template <typename U>
+			static char test (method<U, &U::to_string>*);
+
+			template <typename U>
+			static int test (...);
+
+			static const bool value = sizeof(test<Type>(0)) == sizeof(char);
+		};
+
+		template <typename Type>
+		typename std::enable_if<std::is_fundamental<Type>::value, std::string>::type
+		value (Type value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << value;
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<std::is_pointer<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "(" << type<Type>() << ") " << value;
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_enum<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+		value (Type value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<enum " << type<Type>() << ": " << value << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_enum<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+		value (Type value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<enum " << type<Type>() << ": " <<
+				static_cast<typename std::underlying_type<Type>::type>(value) << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_union<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<union " << type<Type>() << ": " << value << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_union<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<union " << type<Type>() << ":" << &value << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_class<Type>::value && has_insertion_operator<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<" << type<Type>() << ": " << value << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<
+			std::is_class<Type>::value && !has_insertion_operator<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "#<" << type<Type>() << ":" << &value << ">";
+
+			return ss.str();
+		}
+
+		template <typename Type>
+		typename std::enable_if<has_to_string<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			return value.to_string();
+		}
+
+		template <typename Type>
+		typename std::enable_if<std::is_array<Type>::value, std::string>::type
+		value (Type& value)
+		{
+			std::ostringstream ss(std::ostringstream::out);
+			ss << "[";
+
+			for (int i = 0; i < std::extent<Type>::value; i++) {
+				ss << value(value[i]);
+
+				if (i != std::extent<Type>::value - 1) {
+					ss << ", ";
+				}
+			}
+
+			ss << "]";
+
+			return ss.str();
+		}
+	}
+
+	class test
+	{
+		public:
+			class success : public std::runtime_error
+			{
+				public:
+					success (void) : std::runtime_error("test passed") { }
+
+					explicit success (const std::string& what_arg) : std::runtime_error(what_arg) { }
+					explicit success (const char* what_arg) : std::runtime_error(what_arg) { }
+			};
+
+			class failure : public std::runtime_error
+			{
+				public:
+					failure (void) : std::runtime_error("test failed") { }
+
+					explicit failure (const std::string& what_arg) : std::runtime_error(what_arg) { }
+					explicit failure (const char* what_arg) : std::runtime_error(what_arg) { }
+			};
+
+			class skip : public std::runtime_error
+			{
+				public:
+					skip (void) : std::runtime_error("test skipped") { }
+
+					explicit skip (const std::string& what_arg) : std::runtime_error(what_arg) { }
+					explicit skip (const char* what_arg) : std::runtime_error(what_arg) { }
+			};
+
+		public:
+			test (std::string name, std::function<void(void)> check)
+			{
+				_name  = name;
+				_check = check;
+
+				_result = nullptr;
+			}
+
+			std::string
+			name (void)
+			{
+				return _name;
+			}
+
+			std::string
+			message (void)
+			{
+				return _result ? _result->what() : "";
+			}
+
+			bool
+			run (void)
+			{
+				if (_result) {
+					return false;
+				}
+
+				try {
+					_check();
+
+					_result = new success();
+				}
+				catch (success& e) {
+					_result = new success(e);
+				}
+				catch (failure& e) {
+					_result = new failure(e);
+				}
+				catch (skip& e) {
+					_result = new skip(e);
+				}
+
+				return true;
+			}
+
+			bool
+			passed (void)
+			{
+				return dynamic_cast<success*>(_result) != nullptr;
+			}
+
+			bool
+			failed (void)
+			{
+				return dynamic_cast<failure*>(_result) != nullptr;
+			}
+
+			bool
+			skipped (void)
+			{
+				return dynamic_cast<skip*>(_result) != nullptr;
+			}
+
+		private:
+			std::string               _name;
+			std::function<void(void)> _check;
+
+			std::runtime_error* _result;
+	};
+
+	class suite
+	{
+		public:
+			suite (std::string name)
+			{
+				_name = name;
+			}
+
+			suite (std::string name, std::map<std::string, std::function<void(void)>> tests) : suite(name)
+			{
+				add(tests);
+			}
+
+			suite (void) : suite("")
+			{}
+
+			suite (std::map<std::string, std::function<void(void)>> tests) : suite("", tests)
+			{}
+
+			std::string
+			name (void)
+			{
+				return _name;
+			}
+
+			bool
+			anonymous (void)
+			{
+				return _name.empty();
+			}
+
+			suite&
+			add (std::map<std::string, std::function<void(void)>> tests)
+			{
+				for (auto entry : tests) {
+					add(test(entry.first, entry.second));
+				}
+
+				return *this;
+			}
+
+			test&
+			add (test test)
+			{
+				_tests.push_back(test);
+
+				return _tests.back();
+			}
+
+			suite&
+			run (void)
+			{
+				for (auto& test : _tests) {
+					test.run();
+				}
+
+				return *this;
+			}
+
+			bool
+			passed (void)
+			{
+				return std::all_of(begin(), end(), [](test& test) {
+					return test.passed();
+				});
+			}
+
+			std::vector<test>::iterator
+			begin (void)
+			{
+				return _tests.begin();
+			}
+
+			std::vector<test>::iterator
+			end (void)
+			{
+				return _tests.end();
+			}
+
+		private:
+			std::string       _name;
+			std::vector<test> _tests;
+	};
+
+	namespace printer
+	{
+		void
+		prelude (suite& s)
+		{
+			if (s.anonymous()) {
+				std::cout << "Running tests: ";
+			}
+			else {
+				std::cout << "Running tests in " << s.name() << ": ";
+			}
+		}
+
+		void
+		dots (test& t)
+		{
+			t.run();
+
+			if (t.passed()) {
+				std::cout << ".";
+			}
+			else if (t.failed()) {
+				std::cout << "E";
+			}
+			else if (t.skipped()) {
+				std::cout << "S";
+			}
+		}
+	}
+
+	void
+	skip (void)
+	{
+		throw test::skip();
+	}
+
+	void
+	skip (std::string reason)
+	{
+		throw test::skip(reason);
+	}
+
+	void
+	fail (void)
+	{
+		throw test::failure();
+	}
+
+	void
+	fail (std::string reason)
+	{
+		throw test::failure(reason);
+	}
+
+	void
+	pass (void)
+	{
+		throw test::success();
+	}
+
+	void
+	pass (std::string reason)
+	{
+		throw test::success(reason);
+	}
+
+	template <typename Type>
+	void
+	truthy (Type value)
+	{
+		if (!value) {
+			fail("expected a truthy value, got " + stringify::value(value) + " instead");
+		}
+	}
+
+	template <typename Type>
+	void
+	falsy (Type value)
+	{
+		if (value) {
+			fail("expected a falsy value, got " + stringify::value(value) + " instead");
+		}
+	}
+
+	template <typename First, typename Second>
+	void
+	equal (First first, Second second)
+	{
+		if (first != second) {
+			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be equal");
+		}
+	}
+
+	template <typename First, typename Second>
+	void
+	different (First first, Second second)
+	{
+		if (first == second) {
+			fail("expected " + stringify::value(first) + " and " + stringify::value(second) + " to be different");
+		}
+	}
+
+	template <class Exception>
+	void
+	thrown (std::function<void(void)> check)
+	{
+		try {
+			check();
+
+			fail("expected " + stringify::type<Exception>() + " to be thrown but nothing was");
+		}
+		catch (std::exception& e) {
+			if (dynamic_cast<Exception*>(e) == nullptr) {
+				fail("expected " + stringify::type<Exception>() + " to be thrown, but something else was");
+			}
+		}
+	}
+}
+
+void
+amirite (ami::suite suite)
+{
+	suite.run();
+
+	for (auto& test : suite) {
+		if (test.failed()) {
+			std::cout << suite.name() << "/" << test.name() << ":" << std::endl;
+			std::cout << test.message() << std::endl;
+			std::cout << std::endl;
+		}
+	}
+}
+
+void
+amirite (std::string name, std::map<std::string, std::function<void(void)>> tests)
+{
+	ami::suite suite(name, tests);
+
+	amirite(suite);
+}
+
+void
+amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::map<std::string, std::function<void(void)>> tests)
+{
+	ami::suite suite(tests);
+
+	setup(suite);
+
+	for (auto& test : suite) {
+		each(test);
+	}
+
+	std::cout << std::endl;
+}
+
+void
+amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::string name, std::map<std::string, std::function<void(void)>> tests)
+{
+	ami::suite suite(name, tests);
+
+	setup(suite);
+
+	for (auto& test : suite) {
+		each(test);
+	}
+
+	std::cout << std::endl;
+}
+
+
+#endif
