@@ -26,62 +26,74 @@ namespace ami
 {
 	namespace stringify
 	{
-#	ifndef NO_DEMANGLE
-#		include <cxxabi.h>
+#		ifndef NO_DEMANGLE
+#			include <cxxabi.h>
 
-		template <typename Type>
-		std::string
-		type (void)
+			template <typename Type>
+			std::string
+			type (void)
+			{
+				std::string result;
+				int         status;
+				char*       demangled = abi::__cxa_demangle(typeid(Type).name(),
+				                                            	nullptr, nullptr, &status);
+
+				result = demangled;
+				free(demangled);
+
+				return result;
+			}
+#		else
+			template <typename Type>
+			std::string
+			type (void)
+			{
+				return typeid(Type).name();
+			}
+#		endif
+
+		namespace _has_cout
 		{
-			std::string result;
-			int         status;
-			char*       demangled = abi::__cxa_demangle(typeid(Type).name(),
-			                                              nullptr, nullptr, &status);
+			typedef char no[1];
+			typedef char yes[2];
 
-			result = demangled;
-			free(demangled);
+			struct any
+			{
+				template <typename T>
+				any (T const&);
+			};
 
-			return result;
+			no& operator << (std::ostream const&, any const&);
+
+			yes& test (std::ostream&);
+			no&  test (no&);
+
+			template <typename Type>
+			struct has_cout
+			{
+				static std::ostream& s;
+				static Type const& t;
+				static bool const value = sizeof(test(s << t)) == sizeof(yes);
+			};
 		}
-#	else
-		template <typename Type>
-		std::string
-		type (void)
-		{
-			return typeid(Type).name();
-		}
-#	endif
 
 		template <typename Type>
-		struct has_cout
-		{
-			template <typename U, std::ostream& (U::*)() const>
-			struct method
-			{};
-
-			template <typename U>
-			static char test (method<U, &U::operator <<>*);
-
-			template <typename U>
-			static int test (...);
-
-			static const bool value = sizeof(test<Type>(0)) == sizeof(char);
-		};
+		struct has_cout : _has_cout::has_cout<Type>
+		{};
 
 		template <typename Type>
 		struct has_to_string
 		{
-			template <typename U, std::string (U::*)() const>
-			struct method
-			{};
+			typedef char no[1];
+			typedef char yes[2];
 
-			template <typename U>
-			static char test (method<U, &U::to_string>*);
+			template <typename C>
+			static yes& test (decltype(&C::to_string));
 
-			template <typename U>
-			static int test (...);
+			template <typename C>
+			static no& test (...);
 
-			static const bool value = sizeof(test<Type>(0)) == sizeof(char);
+			static const bool value = sizeof(test<Type>(0)) == sizeof(yes);
 		};
 
 		template <typename Type>
@@ -130,8 +142,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<!is_raw_string<Type>::value &&
-			std::is_pointer<Type>::value, std::string>::type
+		typename std::enable_if<std::is_pointer<Type>::value &&
+			!is_raw_string<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -186,8 +198,10 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<!is_string<Type>::value &&
-			std::is_class<Type>::value && has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_class<Type>::value &&
+			!is_string<Type>::value &&
+			!has_to_string<Type>::value &&
+			has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -197,8 +211,10 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<!is_string<Type>::value &&
-			std::is_class<Type>::value && !has_cout<Type>::value, std::string>::type
+		typename std::enable_if<std::is_class<Type>::value &&
+			!has_to_string<Type>::value &&
+			!is_string<Type>::value &&
+			!has_cout<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
@@ -215,8 +231,8 @@ namespace ami
 		}
 
 		template <typename Type>
-		typename std::enable_if<!is_raw_string<Type>::value &&
-			std::is_array<Type>::value, std::string>::type
+		typename std::enable_if<std::is_array<Type>::value &&
+			!is_raw_string<Type>::value, std::string>::type
 		value (Type& value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
