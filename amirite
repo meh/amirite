@@ -551,5 +551,4 @@ amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)>
 	std::cout << std::endl;
 }
 
-
 #endif
