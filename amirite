@@ -124,7 +124,7 @@ namespace ami
 		value (Type value)
 		{
 			std::ostringstream ss(std::ostringstream::out);
-			ss << value;
+			ss << std::boolalpha << value;
 
 			return ss.str();
 		}
