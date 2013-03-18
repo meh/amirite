@@ -1,16 +1,27 @@
-#include <iostream>
 #include "amirite"
 
 int
 main (int argc, char* argv[])
 {
 	return amirite("duh", {
-		{ "dah", []{
-			ami::truthy(23);
+		{ "truthy (ok)", []{
+			amitruthy(23);
 		}},
 
-		{ "deh", []{
-			ami::truthy(0);
+		{ "truthy (fail)", []{
+			amitruthy(0);
+		}},
+
+		{ "falsy (fail)", []{
+			amifalsy(1);
+		}},
+
+		{ "equal (fail)", []{
+			amiequal(1, 0, "derpy doo");
+		}},
+
+		{ "different (fail)", []{
+			amidifferent(1, 1, "._. ");
 		}}
 	});
 }
