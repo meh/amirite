@@ -420,6 +420,8 @@ namespace ami
 		}
 	};
 
+	class suite;
+
 	class test
 	{
 		public:
@@ -482,7 +484,7 @@ namespace ami
 			};
 
 		public:
-			test (std::string name, std::function<void(void)> check)
+			test (suite& suite, std::string name, std::function<void(void)> check) : _suite(suite)
 			{
 				_name  = name;
 				_check = check;
@@ -495,6 +497,12 @@ namespace ami
 				if (_result) {
 					delete _result;
 				}
+			}
+
+			suite const&
+			suite (void) const
+			{
+				return _suite;
 			}
 
 			std::string
@@ -571,6 +579,8 @@ namespace ami
 			}
 
 		private:
+			class suite& _suite;
+
 			std::string               _name;
 			std::function<void(void)> _check;
 
@@ -597,7 +607,7 @@ namespace ami
 			{}
 
 			std::string
-			name (void)
+			name (void) const
 			{
 				return _name;
 			}
@@ -612,7 +622,7 @@ namespace ami
 			add (std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 			{
 				for (auto entry : tests) {
-					add(test(entry.first, entry.second));
+					add(test(*this, entry.first, entry.second));
 				}
 
 				return *this;
@@ -671,6 +681,28 @@ namespace ami
 			}
 			else {
 				std::cout << "Running tests in " << s.name() << ": ";
+			}
+		}
+
+		void
+		standard (test& t)
+		{
+			t.run();
+
+			if (t.failed()) {
+				std::cout << t.suite().name() << "/" << t.name();
+				if (!t.location().empty()) {
+					std::cout << " (" << t.location().file << ":" << t.location().line << ")";
+				}
+				std::cout << std::endl;
+
+				std::cout << t.message();
+				if (!t.info().empty()) {
+					std::cout << " (" << t.info() << ")";
+				}
+				std::cout << std::endl;
+
+				std::cout << std::endl;
 			}
 		}
 
@@ -855,24 +887,8 @@ namespace ami
 int
 amirite (ami::suite suite)
 {
-	suite.run();
-
 	for (auto& test : suite) {
-		if (test.failed()) {
-			std::cout << suite.name() << "/" << test.name();
-			if (!test.location().empty()) {
-				std::cout << " (" << test.location().file << ":" << test.location().line << ")";
-			}
-			std::cout << std::endl;
-
-			std::cout << test.message();
-			if (!test.info().empty()) {
-				std::cout << " (" << test.info() << ")";
-			}
-			std::cout << std::endl;
-
-			std::cout << std::endl;
-		}
+		ami::printer::standard(test);
 	}
 
 	return suite.passed() ? 0 : 1;
