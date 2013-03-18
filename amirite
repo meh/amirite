@@ -15,7 +15,6 @@
 #include <sstream>
 #include <type_traits>
 #include <typeinfo>
-#include <map>
 #include <vector>
 #include <string>
 #include <functional>
@@ -401,17 +400,11 @@ namespace ami
 		unsigned    line;
 		std::string file;
 
-		location (void)
-		{
-			line = 0;
-			file = "";
-		}
+		location (void) : line(0), file("")
+		{}
 
-		location (unsigned l, std::string f)
-		{
-			line = l;
-			file = f;
-		}
+		location (unsigned l, std::string f) : line(l), file(f)
+		{}
 
 		bool
 		empty (void) const
@@ -433,11 +426,8 @@ namespace ami
 					explicit exception (std::string const& what_arg) : std::runtime_error(what_arg) { }
 					explicit exception (char const* what_arg) : std::runtime_error(what_arg) { }
 
-					explicit exception (std::string const& what_arg, std::string const& info, struct location const& location) : std::runtime_error(what_arg)
-					{
-						_info     = info;
-						_location = location;
-					}
+					explicit exception (std::string const& what_arg, std::string const& info, struct location const& location) : std::runtime_error(what_arg), _info(info), _location(location)
+					{}
 
 					std::string
 					info (void)
@@ -445,7 +435,7 @@ namespace ami
 						return _info;
 					}
 
-					location const&
+					struct location const&
 					location (void)
 					{
 						return _location;
@@ -484,13 +474,8 @@ namespace ami
 			};
 
 		public:
-			test (suite& suite, std::string name, std::function<void(void)> check) : _suite(suite)
-			{
-				_name  = name;
-				_check = check;
-
-				_result = nullptr;
-			}
+			test (suite& suite, std::string name, std::function<void(void)> check) : _suite(suite), _name(name), _check(check), _result(nullptr)
+			{}
 
 			~test (void)
 			{
@@ -499,7 +484,7 @@ namespace ami
 				}
 			}
 
-			suite const&
+			class suite const&
 			suite (void) const
 			{
 				return _suite;
@@ -579,7 +564,7 @@ namespace ami
 			}
 
 		private:
-			class suite& _suite;
+			class suite const& _suite;
 
 			std::string               _name;
 			std::function<void(void)> _check;
@@ -590,10 +575,8 @@ namespace ami
 	class suite
 	{
 		public:
-			suite (std::string name)
-			{
-				_name = name;
-			}
+			suite (std::string name) : _name(name)
+			{}
 
 			suite (std::string name, std::vector<std::pair<std::string, std::function<void(void)>>> tests) : suite(name)
 			{
@@ -649,8 +632,8 @@ namespace ami
 			bool
 			passed (void)
 			{
-				return std::none_of(begin(), end(), [](test& test) {
-					return test.failed();
+				return std::none_of(begin(), end(), [](test& t) {
+					return t.failed();
 				});
 			}
 
