@@ -585,7 +585,7 @@ namespace ami
 				_name = name;
 			}
 
-			suite (std::string name, std::map<std::string, std::function<void(void)>> tests) : suite(name)
+			suite (std::string name, std::vector<std::pair<std::string, std::function<void(void)>>> tests) : suite(name)
 			{
 				add(tests);
 			}
@@ -593,7 +593,7 @@ namespace ami
 			suite (void) : suite("")
 			{}
 
-			suite (std::map<std::string, std::function<void(void)>> tests) : suite("", tests)
+			suite (std::vector<std::pair<std::string, std::function<void(void)>>> tests) : suite("", tests)
 			{}
 
 			std::string
@@ -609,7 +609,7 @@ namespace ami
 			}
 
 			suite&
-			add (std::map<std::string, std::function<void(void)>> tests)
+			add (std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 			{
 				for (auto entry : tests) {
 					add(test(entry.first, entry.second));
@@ -879,7 +879,7 @@ amirite (ami::suite suite)
 }
 
 int
-amirite (std::string name, std::map<std::string, std::function<void(void)>> tests)
+amirite (std::string name, std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 {
 	ami::suite suite(name, tests);
 
@@ -887,7 +887,7 @@ amirite (std::string name, std::map<std::string, std::function<void(void)>> test
 }
 
 int
-amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::map<std::string, std::function<void(void)>> tests)
+amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 {
 	ami::suite suite(tests);
 
@@ -903,7 +903,7 @@ amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)>
 }
 
 int
-amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::string name, std::map<std::string, std::function<void(void)>> tests)
+amirite (std::function<void(ami::suite&)> setup, std::function<void(ami::test&)> each, std::string name, std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 {
 	ami::suite suite(name, tests);
 
