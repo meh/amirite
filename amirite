@@ -396,6 +396,29 @@ namespace inspect
 
 namespace ami
 {
+	struct location
+	{
+		unsigned    line;
+		std::string file;
+
+		location (void)
+		{
+			line = 0;
+			file = "";
+		}
+
+		location (unsigned l, std::string f)
+		{
+			line = l;
+			file = f;
+		}
+
+		bool
+		empty (void) const
+		{
+			return line == 0 && file.empty();
+		}
+	};
 
 	class test
 	{
@@ -408,9 +431,10 @@ namespace ami
 					explicit exception (std::string const& what_arg) : std::runtime_error(what_arg) { }
 					explicit exception (char const* what_arg) : std::runtime_error(what_arg) { }
 
-					explicit exception (std::string const& what_arg, std::string const& info) : std::runtime_error(what_arg)
+					explicit exception (std::string const& what_arg, std::string const& info, struct location const& location) : std::runtime_error(what_arg)
 					{
-						_info = info;
+						_info     = info;
+						_location = location;
 					}
 
 					std::string
@@ -419,9 +443,15 @@ namespace ami
 						return _info;
 					}
 
-				private:
-					std::string _info;
+					location const&
+					location (void)
+					{
+						return _location;
+					}
 
+				private:
+					std::string     _info;
+					struct location _location;
 			};
 
 			class success : public exception
@@ -430,7 +460,7 @@ namespace ami
 					explicit success (void) : exception("test passed") { }
 					explicit success (std::string const& what_arg) : exception(what_arg) { }
 					explicit success (char const* what_arg) : exception(what_arg) { }
-					explicit success (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
+					explicit success (std::string const& what_arg, std::string const& info, struct location const& location) : exception(what_arg, info, location) { }
 			};
 
 			class failure : public exception
@@ -439,7 +469,7 @@ namespace ami
 					explicit failure (void) : exception("test passed") { }
 					explicit failure (std::string const& what_arg) : exception(what_arg) { }
 					explicit failure (char const* what_arg) : exception(what_arg) { }
-					explicit failure (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
+					explicit failure (std::string const& what_arg, std::string const& info, struct location const& location) : exception(what_arg, info, location) { }
 			};
 
 			class skip : public exception
@@ -448,7 +478,7 @@ namespace ami
 					explicit skip (void) : exception("test passed") { }
 					explicit skip (std::string const& what_arg) : exception(what_arg) { }
 					explicit skip (char const* what_arg) : exception(what_arg) { }
-					explicit skip (std::string const& what_arg, std::string const& info) : exception(what_arg, info) { }
+					explicit skip (std::string const& what_arg, std::string const& info, struct location const& location) : exception(what_arg, info, location) { }
 			};
 
 		public:
@@ -526,6 +556,18 @@ namespace ami
 			skipped (void)
 			{
 				return dynamic_cast<skip*>(_result) != nullptr;
+			}
+
+			const struct location
+			location (void)
+			{
+				struct location result;
+
+				if (_result) {
+					result = _result->location();
+				}
+
+				return result;
 			}
 
 		private:
@@ -656,9 +698,9 @@ namespace ami
 	}
 
 	void
-	skip (std::string reason, std::string info = "")
+	skip (std::string reason, std::string info = "", location loc = {})
 	{
-		throw test::skip(reason, info);
+		throw test::skip(reason, info, loc);
 	}
 
 	void
@@ -668,9 +710,9 @@ namespace ami
 	}
 
 	void
-	fail (std::string reason, std::string info = "")
+	fail (std::string reason, std::string info = "", location loc = {})
 	{
-		throw test::failure(reason, info);
+		throw test::failure(reason, info, loc);
 	}
 
 	void
@@ -680,46 +722,102 @@ namespace ami
 	}
 
 	void
-	pass (std::string reason, std::string info = "")
+	pass (std::string reason, std::string info = "", location loc = {})
 	{
-		throw test::success(reason, info);
+		throw test::success(reason, info, loc);
 	}
 
 	template <typename Type>
 	void
-	truthy (Type value, std::string info = "")
+	truthy (Type value, std::string info = "", location loc = {})
 	{
 		if (!value) {
-			fail("expected a truthy value, got " + inspect::value(value) + " instead", info);
+			fail("expected a truthy value, got " + inspect::value(value) + " instead", info, loc);
 		}
 	}
+
+#	define _amitruthy1(value) \
+		ami::truthy(value, "", ami::location(__LINE__, __FILE__))
+
+#	define _amitruthy2(value, info) \
+		ami::truthy(value, info, ami::location(__LINE__, __FILE__))
+
+#	define _amitruthy(_, _1, _2, selected, ...) \
+		selected
+
+#	define amitruthy(...) \
+		_amitruthy(, ## __VA_ARGS__, \
+		             _amitruthy2(__VA_ARGS__), \
+		             _amitruthy1(__VA_ARGS__))
 
 	template <typename Type>
 	void
-	falsy (Type value, std::string info = "")
+	falsy (Type value, std::string info = "", location loc = {})
 	{
 		if (value) {
-			fail("expected a falsy value, got " + inspect::value(value) + " instead", info);
+			fail("expected a falsy value, got " + inspect::value(value) + " instead", info, loc);
 		}
 	}
 
+#	define _amifalsy1(value) \
+		ami::falsy(value, "", ami::location(__LINE__, __FILE__))
+
+#	define _amifalsy2(value, info) \
+		ami::falsy(value, info, ami::location(__LINE__, __FILE__))
+
+#	define _amifalsy(_, _1, _2, selected, ...) \
+		selected
+
+#	define amifalsy(...) \
+		_amifalsy(, ## __VA_ARGS__, \
+		             _amifalsy2(__VA_ARGS__), \
+		             _amifalsy1(__VA_ARGS__))
+
 	template <typename First, typename Second>
 	void
-	equal (First first, Second second, std::string info = "")
+	equal (First first, Second second, std::string info = "", location loc = {})
 	{
 		if (first != second) {
-			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be equal", info);
+			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be equal", info, loc);
 		}
 	}
 
+#	define _amiequal2(first, second) \
+		ami::equal(first, second, "", ami::location(__LINE__, __FILE__))
+
+#	define _amiequal3(first, second, info) \
+		ami::equal(first, second, info, ami::location(__LINE__, __FILE__))
+
+#	define _amiequal(_, _1, _2, _3, selected, ...) \
+		selected
+
+#	define amiequal(...) \
+		_amiequal(, ## __VA_ARGS__, \
+		             _amiequal3(__VA_ARGS__), \
+		             _amiequal2(__VA_ARGS__))
+
 	template <typename First, typename Second>
 	void
-	different (First first, Second second, std::string info = "")
+	different (First first, Second second, std::string info = "", location loc = {})
 	{
 		if (first == second) {
-			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be different", info);
+			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be different", info, loc);
 		}
 	}
+
+#	define _amidifferent2(first, second) \
+		ami::different(first, second, "", ami::location(__LINE__, __FILE__))
+
+#	define _amidifferent3(first, second, info) \
+		ami::different(first, second, info, ami::location(__LINE__, __FILE__))
+
+#	define _amidifferent(_, _1, _2, _3, selected, ...) \
+		selected
+
+#	define amidifferent(...) \
+		_amidifferent(, ## __VA_ARGS__, \
+		             _amidifferent3(__VA_ARGS__), \
+		             _amidifferent2(__VA_ARGS__))
 
 	template <class Exception>
 	void
@@ -752,7 +850,6 @@ namespace ami
 			}
 		}
 	}
-
 }
 
 int
@@ -762,16 +859,18 @@ amirite (ami::suite suite)
 
 	for (auto& test : suite) {
 		if (test.failed()) {
-			std::cout << suite.name() << "/" << test.name() << ": ";
+			std::cout << suite.name() << "/" << test.name();
+			if (!test.location().empty()) {
+				std::cout << " (" << test.location().file << ":" << test.location().line << ")";
+			}
+			std::cout << std::endl;
 
+			std::cout << test.message();
 			if (!test.info().empty()) {
-				std::cout << test.info() << std::endl;
+				std::cout << " (" << test.info() << ")";
 			}
-			else {
-				std::cout << std::endl;
-			}
+			std::cout << std::endl;
 
-			std::cout << test.message() << std::endl;
 			std::cout << std::endl;
 		}
 	}
