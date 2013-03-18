@@ -836,35 +836,71 @@ namespace ami
 
 	template <class Exception>
 	void
-	thrown (std::function<void(void)> check)
+	thrown (std::function<void(void)> check, location loc = {})
 	{
+		bool raised = true;
+
 		try {
 			check();
 
-			fail("expected " + inspect::type<Exception>() + " to be thrown, but nothing was");
+			raised = false;
 		}
 		catch (std::exception& e) {
-			if (dynamic_cast<Exception*>(e) == nullptr) {
-				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was");
+			if (dynamic_cast<Exception*>(&e) == nullptr) {
+				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was", "", loc);
 			}
+		}
+		catch (std::exception* e) {
+			if (dynamic_cast<Exception*>(e) == nullptr) {
+				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was", "", loc);
+			}
+		}
+
+		if (!raised) {
+			fail("expected " + inspect::type<Exception>() + " to be thrown, but nothing was", "", loc);
 		}
 	}
 
 	template <class Exception>
 	void
-	thrown (std::string info, std::function<void(void)> check)
+	thrown (std::string info, std::function<void(void)> check, location loc = {})
 	{
+		bool raised = true;
+
 		try {
 			check();
 
-			fail("expected " + inspect::type<Exception>() + " to be thrown, but nothing was", info);
+			raised = false;
 		}
 		catch (std::exception& e) {
-			if (dynamic_cast<Exception*>(e) == nullptr) {
-				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was", info);
+			if (dynamic_cast<Exception*>(&e) == nullptr) {
+				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was", info, loc);
 			}
 		}
+		catch (std::exception* e) {
+			if (dynamic_cast<Exception*>(e) == nullptr) {
+				fail("expected " + inspect::type<Exception>() + " to be thrown, but something else was", "", loc);
+			}
+		}
+
+		if (!raised) {
+			fail("expected " + inspect::type<Exception>() + " to be thrown, but nothing was", info, loc);
+		}
 	}
+
+#	define _amithrown2(exception, body) \
+		ami::thrown<exception>(body, ami::location(__LINE__, __FILE__))
+
+#	define _amithrown3(exception, info, body) \
+		ami::thrown<exception>(info, body, ami::location(__LINE__, __FILE__))
+
+#	define _amithrown(_, _1, _2, _3, selected, ...) \
+		selected
+
+#	define amithrown(...) \
+		_amithrown(, ## __VA_ARGS__, \
+		             _amithrown3(__VA_ARGS__), \
+		             _amithrown2(__VA_ARGS__))
 }
 
 int
