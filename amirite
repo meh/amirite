@@ -916,9 +916,7 @@ amirite (ami::suite suite)
 int
 amirite (std::string name, std::vector<std::pair<std::string, std::function<void(void)>>> tests)
 {
-	ami::suite suite(name, tests);
-
-	return amirite(suite);
+	return amirite(ami::suite(name, tests));
 }
 
 int
