@@ -814,7 +814,7 @@ namespace ami
 	void
 	equal (First first, Second second, std::string info = "", location loc = {})
 	{
-		if (first != second) {
+		if (!(first == second)) {
 			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be equal", info, loc);
 		}
 	}
@@ -837,7 +837,7 @@ namespace ami
 	void
 	different (First first, Second second, std::string info = "", location loc = {})
 	{
-		if (first == second) {
+		if (!(first != second)) {
 			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be different", info, loc);
 		}
 	}
@@ -910,6 +910,9 @@ namespace ami
 		}
 	}
 
+#	define _amithrown1(body) \
+		ami::thrown<std::exception>(body, ami::location(__LINE__, __FILE__))
+
 #	define _amithrown2(exception, body) \
 		ami::thrown<exception>(body, ami::location(__LINE__, __FILE__))
 
@@ -922,7 +925,45 @@ namespace ami
 #	define amithrown(...) \
 		_amithrown(, ## __VA_ARGS__, \
 		             _amithrown3(__VA_ARGS__), \
-		             _amithrown2(__VA_ARGS__))
+		             _amithrown2(__VA_ARGS__), \
+		             _amithrown1(__VA_ARGS__))
+
+	void
+	okay (std::function<void(void)> check, location loc = {})
+	{
+		try {
+			check();
+		}
+		catch (...) {
+			fail("expected nothing to be thrown, something was", "", loc);
+		}
+	}
+
+	void
+	okay (std::string info, std::function<void(void)> check, location loc = {})
+	{
+		try {
+			check();
+		}
+		catch (...) {
+			fail("expected nothing to be thrown, something was", info, loc);
+		}
+	}
+
+#	define _amiokay1(body) \
+		ami::okay(body, ami::location(__LINE__, __FILE__))
+
+#	define _amiokay2(info, body) \
+		ami::okay(info, body, ami::location(__LINE__, __FILE__))
+
+#	define _amiokay(_, _1, _2, selected, ...) \
+		selected
+
+#	define amiokay(...) \
+		_amiokay(, ## __VA_ARGS__, \
+		             _amiokay2(__VA_ARGS__), \
+		             _amiokay1(__VA_ARGS__))
+
 }
 
 int
