@@ -18,6 +18,7 @@
 #include <typeinfo>
 #include <string>
 #include <cstring>
+#include <cwctype>
 
 namespace inspect
 {
@@ -25,9 +26,9 @@ namespace inspect
 #		include <cxxabi.h>
 
 		template <typename Type>
-		inline
+		static
 		std::string
-		type (void)
+		type (void) noexcept
 		{
 			std::string result;
 			int         status;
@@ -51,9 +52,9 @@ namespace inspect
 #		include <Dbghelp.h>
 
 		template <typename Type>
-		inline
+		static
 		std::string
-		type (void)
+		type (void) noexcept
 		{
 			char demangled[4096];
 			UnDecorateSymbolName(typeid(Type).name(), demangled, 4096,
@@ -63,9 +64,9 @@ namespace inspect
 		}
 #	else
 		template <typename Type>
-		inline
+		static
 		std::string
-		type (void)
+		type (void) noexcept
 		{
 			return typeid(Type).name();
 		}
@@ -215,14 +216,14 @@ namespace inspect
 	};
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<is_raw_string<Type>::value &&
 		std::is_same<typename is_raw_string<Type>::type, char>::value, std::string>::type
-	value (Type value, size_t length = -1)
+	value (Type value, size_t length = -1) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 
-		if (length == -1) {
+		if (length == (size_t) -1) {
 			length = std::strlen(value);
 		}
 
@@ -232,7 +233,7 @@ namespace inspect
 
 			if (std::isprint(ch)) {
 				if (ch == '\\' || ch == '"') {
-					ss << "\\";
+					ss << '\\';
 				}
 
 				ss << (char) ch;
@@ -255,60 +256,100 @@ namespace inspect
 		return ss.str();
 	}
 
-	// TODO: implement std::wstring inspection
+	template <typename Type>
+	static
+	typename std::enable_if<is_raw_string<Type>::value &&
+		std::is_same<typename is_raw_string<Type>::type, wchar_t>::value, std::wstring>::type
+	value (Type value, size_t length = -1) noexcept
+	{
+		std::wstringstream ss(std::stringstream::out);
+
+		if (length == (size_t) -1) {
+			length = std::wcslen(value);
+		}
+
+		ss << '"';
+		for (size_t i = 0; i < length; i++) {
+			wchar_t ch = value[i];
+
+			if (std::iswprint(ch)) {
+				if (ch == '\\' || ch == '"') {
+					ss << '\\';
+				}
+
+				ss << ch;
+			}
+			else {
+				switch (ch) {
+					case '\t': ss << "\\t"; break;
+					case '\n': ss << "\\n"; break;
+					case '\v': ss << "\\v"; break;
+					case '\f': ss << "\\f"; break;
+					case '\r': ss << "\\r"; break;
+
+					default:
+						ss << "\\u" << std::setfill(L'0') << std::setw(4) << std::hex << (unsigned) ch;
+				}
+			}
+		}
+		ss << '"';
+
+		return ss.str();
+	}
+
 	// TODO: implement std::u16string inspection
 	// TODO: implement std::u32string inspection
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<is_string<Type>::value, Type>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
 		return inspect::value(value.data(), value.size());
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_fundamental<Type>::value, std::string>::type
-	value (Type value)
+	value (Type value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << std::boolalpha << value;
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_pointer<Type>::value &&
 		!is_raw_string<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "(" << type<Type>() << ") 0x" << std::hex << (intptr_t) value;
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_enum<Type>::value &&
 		has_cout<Type>::value, std::string>::type
-	value (Type value)
+	value (Type value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ": " << value << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_enum<Type>::value &&
 		!has_cout<Type>::value, std::string>::type
-	value (Type value)
+	value (Type value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ": " <<
 			static_cast<typename std::underlying_type<Type>::type>(value) << ">";
 
@@ -316,88 +357,88 @@ namespace inspect
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_union<Type>::value &&
 		has_cout<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ": " << value << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_union<Type>::value &&
 		!has_cout<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ":" << &value << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_class<Type>::value &&
 		!is_string<Type>::value &&
 		!has_to_string_method<Type>::value &&
 		has_cout<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ": " << value << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_class<Type>::value &&
 		!is_string<Type>::value &&
 		!has_to_string_method<Type>::value &&
 		!has_inspect_method<Type>::value &&
 		!has_cout<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ":" << &value << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<has_to_string_method<Type>::value &&
 		!has_inspect_method<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 		ss << "#<" << type<Type>() << ": " << value.to_string() << ">";
 
 		return ss.str();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<has_inspect_method<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
 		return value.inspect();
 	}
 
 	template <typename Type>
-	inline
+	static
 	typename std::enable_if<std::is_array<Type>::value &&
 		!is_raw_string<Type>::value, std::string>::type
-	value (Type& value)
+	value (Type& value) noexcept
 	{
-		std::ostringstream ss(std::ostringstream::out);
+		std::stringstream ss(std::stringstream::out);
 
 		ss << "[";
-		for (unsigned i = 0; i < std::extent<Type>::value; i++) {
+		for (size_t i = 0; i < std::extent<Type>::value; i++) {
 			ss << inspect::value(value[i]);
 
 			if (i < std::extent<Type>::value - 1) {
