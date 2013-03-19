@@ -22,6 +22,16 @@ main (int argc, char* argv[])
 
 		{ "different (fail)", []{
 			amidifferent(1, 1, "._. ");
+		}},
+
+		{ "thrown (fail)", []{
+			amithrown(std::runtime_error, []{});
+		}},
+
+		{ "okay (fail)", []{
+			amiokay([]{
+				throw "lol";
+			});
 		}}
 	});
 }
