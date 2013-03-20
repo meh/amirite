@@ -30,6 +30,11 @@ an `operator ==` it will be used.
 Gets two values to compare using `if (first != second)`, which means if there's
 an `operator !=` it will be used.
 
+`amisimilar (first, second, precision = -1)`
+--------------------------------------------
+Gets two floating point values to compare based on precision, if precision is -1 it
+will use the smallest `std::numeric_limits<*type*>::digits10` value.
+
 `amithrown (type = std::exception, body)`
 -----------------------------------------
 Gets the type of the exception and a lambda, function or other `std::function`
