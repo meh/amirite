@@ -24,6 +24,14 @@ main (int argc, char* argv[])
 			amidifferent(1, 1, "._. ");
 		}},
 
+		{ "similar (ok)", []{
+			amisimilar(0.543, 0.5432, 3);
+		}},
+
+		{ "similar (fail)", []{
+			amisimilar(0.543, 0.5432, 4);
+		}},
+
 		{ "thrown (fail)", []{
 			amithrown(std::runtime_error, []{});
 		}},
