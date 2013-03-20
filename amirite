@@ -508,7 +508,10 @@ namespace ami
 					explicit exception (std::string const& what_arg) : std::runtime_error(what_arg) { }
 					explicit exception (char const* what_arg) : std::runtime_error(what_arg) { }
 
-					explicit exception (std::string const& what_arg, std::string const& info, struct location const& location) : std::runtime_error(what_arg), _info(info), _location(location)
+					explicit exception (std::string const& what_arg, std::string const& info, struct location const& location) :
+						std::runtime_error(what_arg),
+						_info(info),
+						_location(location)
 					{}
 
 					std::string
