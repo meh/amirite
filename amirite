@@ -14,6 +14,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <limits>
 #include <type_traits>
 #include <typeinfo>
 #include <string>
@@ -188,10 +189,11 @@ namespace inspect
 	struct is_string
 	{
 		enum : bool {
-			value = std::is_same<Type, std::string>::value ||
-		          std::is_same<Type, std::wstring>::value ||
-		          std::is_same<Type, std::u16string>::value ||
-		          std::is_same<Type, std::u32string>::value
+			value =
+				std::is_same<Type, std::string>::value ||
+				std::is_same<Type, std::wstring>::value ||
+				std::is_same<Type, std::u16string>::value ||
+				std::is_same<Type, std::u32string>::value
 		};
 	};
 
@@ -202,23 +204,25 @@ namespace inspect
 			typename std::remove_pointer<Type>::type>::type>::type type;
 
 		enum : bool {
-			value = ((std::is_array<Type>::value &&
-			           std::extent<typename std::remove_extent<Type>::type>::value == 0) ||
+			value =
+				((std::is_array<Type>::value &&
+					std::extent<typename std::remove_extent<Type>::type>::value == 0) ||
 
-			         (std::is_pointer<Type>::value &&
-			           !std::is_pointer<typename std::remove_pointer<Type>::type>::value)) &&
+				 (std::is_pointer<Type>::value &&
+					!std::is_pointer<typename std::remove_pointer<Type>::type>::value)) &&
 
-			        (std::is_same<type, char>::value ||
-			         std::is_same<type, wchar_t>::value ||
-			         std::is_same<type, char16_t>::value ||
-			         std::is_same<type, char32_t>::value)
+				(std::is_same<type, char>::value ||
+				 std::is_same<type, wchar_t>::value ||
+				 std::is_same<type, char16_t>::value ||
+				 std::is_same<type, char32_t>::value)
 		};
 	};
 
 	template <typename Type>
 	static
 	typename std::enable_if<is_raw_string<Type>::value &&
-		std::is_same<typename is_raw_string<Type>::type, char>::value, std::string>::type
+		std::is_same<typename is_raw_string<Type>::type, char>::value,
+			std::string>::type
 	value (Type value, size_t length = -1) noexcept
 	{
 		std::stringstream ss(std::stringstream::out);
@@ -247,7 +251,8 @@ namespace inspect
 					case '\r': ss << "\\r"; break;
 
 					default:
-						ss << "\\x" << std::setfill('0') << std::setw(2) << std::hex << (unsigned) ch;
+						ss << "\\x" << std::setfill('0') << std::setw(2) << std::hex <<
+							(unsigned) ch;
 				}
 			}
 		}
@@ -259,7 +264,8 @@ namespace inspect
 	template <typename Type>
 	static
 	typename std::enable_if<is_raw_string<Type>::value &&
-		std::is_same<typename is_raw_string<Type>::type, wchar_t>::value, std::wstring>::type
+		std::is_same<typename is_raw_string<Type>::type, wchar_t>::value,
+			std::wstring>::type
 	value (Type value, size_t length = -1) noexcept
 	{
 		std::wstringstream ss(std::stringstream::out);
@@ -310,11 +316,24 @@ namespace inspect
 
 	template <typename Type>
 	static
-	typename std::enable_if<std::is_fundamental<Type>::value, std::string>::type
+	typename std::enable_if<std::is_fundamental<Type>::value &&
+		!std::is_floating_point<Type>::value, std::string>::type
 	value (Type value) noexcept
 	{
 		std::stringstream ss(std::stringstream::out);
 		ss << std::boolalpha << value;
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<std::is_fundamental<Type>::value &&
+		std::is_floating_point<Type>::value, std::string>::type
+	value (Type value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+		ss << std::setprecision(std::numeric_limits<Type>::digits10) << value;
 
 		return ss.str();
 	}
