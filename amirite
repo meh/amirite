@@ -919,6 +919,46 @@ namespace ami
 		             _amidifferent3(__VA_ARGS__), \
 		             _amidifferent2(__VA_ARGS__))
 
+	template <typename First, typename Second>
+	typename std::enable_if<std::is_floating_point<First>::value
+		&& std::is_floating_point<Second>::value>::type
+	similar (First first, Second second, int precision = -1, std::string info = "", location loc = {})
+	{
+		if (precision == -1) {
+			precision = std::min(std::numeric_limits<First>::digits10,
+			                     std::numeric_limits<Second>::digits10);
+		}
+
+		std::stringstream f(std::stringstream::out);
+		std::stringstream s(std::stringstream::out);
+
+		f << std::setprecision(precision) << first;
+		s << std::setprecision(precision) << second;
+
+		if (f.str() != s.str()) {
+			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be similar", info, loc);
+		}
+
+	}
+
+#	define _amisimilar2(first, second) \
+		ami::similar(first, second, -1, "", ami::location(__LINE__, __FILE__))
+
+#	define _amisimilar3(first, second, precision) \
+		ami::similar(first, second, precision, "", ami::location(__LINE__, __FILE__))
+
+#	define _amisimilar4(first, second, precision, info) \
+		ami::similar(first, second, precision, info, ami::location(__LINE__, __FILE__))
+
+#	define _amisimilar(_, _1, _2, _3, _4, selected, ...) \
+		selected
+
+#	define amisimilar(...) \
+		_amisimilar(, ## __VA_ARGS__, \
+		             _amisimilar4(__VA_ARGS__), \
+		             _amisimilar3(__VA_ARGS__), \
+		             _amisimilar2(__VA_ARGS__))
+
 	template <class Exception>
 	void
 	thrown (std::function<void(void)> check, location loc = {})
