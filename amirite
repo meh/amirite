@@ -21,6 +21,11 @@
 #include <cstring>
 #include <cwctype>
 
+#ifdef _MSC_VER
+#	define noexcept
+#	define constexpr const
+#endif
+
 namespace inspect
 {
 #	if defined(__clang__) || defined(__GNUC__) && !defined(NO_DEMANGLE)
@@ -95,9 +100,7 @@ namespace inspect
 			static std::ostream& s;
 			static Type const& t;
 
-			enum : bool {
-				value = sizeof(test(s << t)) == sizeof(yes)
-			};
+			static constexpr bool value = sizeof(test(s << t)) == sizeof(yes);
 		};
 	}
 
@@ -131,18 +134,14 @@ namespace inspect
 		template <class T>
 		static no& test (...);
 
-		enum : bool {
-			value = sizeof(test<Type>(0)) == sizeof(yes)
-		};
+		static constexpr bool value = sizeof(test<Type>(0)) == sizeof(yes);
 	};
 
 	template <typename Type>
 	struct has_to_string_method<Type,
 		typename std::enable_if<!std::is_class<Type>::value>::type>
 	{
-		enum : bool {
-			value = false
-		};
+		static constexpr bool value = false;
 	};
 
 	template <typename Type, class Enable = void>
@@ -171,30 +170,24 @@ namespace inspect
 		template <class T>
 		static no& test (...);
 
-		enum : bool {
-			value = sizeof(test<Type>(0)) == sizeof(yes)
-		};
+		static constexpr bool value = sizeof(test<Type>(0)) == sizeof(yes);
 	};
 
 	template <typename Type>
 	struct has_inspect_method<Type,
 		typename std::enable_if<!std::is_class<Type>::value>::type>
 	{
-		enum : bool {
-			value = false
-		};
+		static constexpr bool value = false;
 	};
 
 	template <typename Type>
 	struct is_string
 	{
-		enum : bool {
-			value =
-				std::is_same<Type, std::string>::value ||
-				std::is_same<Type, std::wstring>::value ||
-				std::is_same<Type, std::u16string>::value ||
-				std::is_same<Type, std::u32string>::value
-		};
+		static constexpr bool value =
+			std::is_same<Type, std::string>::value ||
+			std::is_same<Type, std::wstring>::value ||
+			std::is_same<Type, std::u16string>::value ||
+			std::is_same<Type, std::u32string>::value;
 	};
 
 	template <typename Type>
@@ -203,19 +196,17 @@ namespace inspect
 		typedef typename std::remove_const<typename std::remove_extent<
 			typename std::remove_pointer<Type>::type>::type>::type type;
 
-		enum : bool {
-			value =
-				((std::is_array<Type>::value &&
-					std::extent<typename std::remove_extent<Type>::type>::value == 0) ||
+		static constexpr bool value =
+			((std::is_array<Type>::value &&
+				std::extent<typename std::remove_extent<Type>::type>::value == 0) ||
 
-				 (std::is_pointer<Type>::value &&
-					!std::is_pointer<typename std::remove_pointer<Type>::type>::value)) &&
+			 (std::is_pointer<Type>::value &&
+				!std::is_pointer<typename std::remove_pointer<Type>::type>::value)) &&
 
-				(std::is_same<type, char>::value ||
-				 std::is_same<type, wchar_t>::value ||
-				 std::is_same<type, char16_t>::value ||
-				 std::is_same<type, char32_t>::value)
-		};
+			(std::is_same<type, char>::value ||
+			 std::is_same<type, wchar_t>::value ||
+			 std::is_same<type, char16_t>::value ||
+			 std::is_same<type, char32_t>::value);
 	};
 
 	template <typename Type>
@@ -232,10 +223,10 @@ namespace inspect
 		}
 
 		ss << '"';
-		for (int i = 0; i < length; i++) {
+		for (size_t i = 0; i < length; i++) {
 			unsigned char ch = value[i];
 
-			if (std::isprint(ch)) {
+			if (isprint(ch)) {
 				if (ch == '\\' || ch == '"') {
 					ss << '\\';
 				}
