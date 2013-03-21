@@ -1057,7 +1057,6 @@ namespace ami
 		_amiokay(, ## __VA_ARGS__, \
 		             _amiokay2(__VA_ARGS__), \
 		             _amiokay1(__VA_ARGS__))
-
 }
 
 int
