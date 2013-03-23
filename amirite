@@ -17,7 +17,9 @@
 #include <limits>
 #include <type_traits>
 #include <typeinfo>
+#include <utility>
 #include <string>
+#include <functional>
 #include <cstring>
 #include <cwctype>
 
@@ -31,14 +33,14 @@ namespace inspect
 #	if defined(__clang__) || defined(__GNUC__) && !defined(NO_DEMANGLE)
 #		include <cxxabi.h>
 
-		template <typename Type>
+		template <typename Type = void>
 		static
 		std::string
-		type (void) noexcept
+		type (std::type_info const* info) noexcept
 		{
 			std::string result;
 			int         status;
-			char*       demangled = abi::__cxa_demangle(typeid(Type).name(),
+			char*       demangled = abi::__cxa_demangle(info->name(),
 			                                              nullptr, nullptr, &status);
 
 			result = demangled;
@@ -57,26 +59,159 @@ namespace inspect
 #		include <Windows.h>
 #		include <Dbghelp.h>
 
-		template <typename Type>
+		template <typename Type = void>
 		static
 		std::string
-		type (void) noexcept
+		type (std::type_info const* info) noexcept
 		{
 			char demangled[4096];
-			UnDecorateSymbolName(typeid(Type).name(), demangled, 4096,
+			UnDecorateSymbolName(info->name(), demangled, 4096,
 				UNDNAME_COMPLETE);
 
 			return demangled;
 		}
 #	else
-		template <typename Type>
+		template <typename Type = void>
 		static
 		std::string
-		type (void) noexcept
+		type (std::type_info const* info) noexcept
 		{
-			return typeid(Type).name();
+				return info->name();
 		}
 #	endif
+
+	template <typename Type = void>
+	static
+	std::string type (void) noexcept
+	{
+		return type<Type>(&typeid(Type));
+	}
+
+	template <typename Function>
+	struct function_traits
+		: public function_traits<decltype(&Function::operator())>
+	{};
+
+	template <typename ClassType, typename ReturnType, typename... Args>
+	struct function_traits<ReturnType(ClassType::*)(Args...) const>
+	{
+		typedef ReturnType (*pointer)(Args...);
+	};
+
+	template <typename Function>
+	static
+	typename std::enable_if<std::is_function<Function>::value,
+		std::tuple<std::string, std::string, std::string>>::type
+	function (void)
+	{
+		std::string string = type<Function>();
+
+		size_t pos = string.find("(");
+
+		return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+	}
+
+	template <typename Function>
+	static
+	typename std::enable_if<std::is_member_function_pointer<Function>::value,
+		std::tuple<std::string, std::string, std::string>>::type
+	function (void)
+	{
+		std::string string = type<Function>();
+
+		std::string return_value;
+		{
+			size_t pos = string.find("(");
+
+			return_value = string.substr(0, pos - 1);
+		}
+
+		std::string klass;
+		{
+			size_t pos  = string.find("(");
+			size_t pos2 = string.find(":", pos);
+
+			klass = string.substr(pos + 1, pos2 - pos - 1);
+		}
+
+		std::string arguments;
+		{
+			size_t pos = string.find(")");
+
+			arguments = string.substr(pos + 1);
+		}
+
+		return std::make_tuple(return_value, arguments, klass);
+	}
+
+	template <typename Function>
+	static
+	typename std::enable_if<std::is_class<Function>::value,
+		std::tuple<std::string, std::string, std::string>>::type
+	function (void)
+	{
+		std::string string = type<typename function_traits<Function>::pointer>();
+		{
+			size_t pos = string.find("(*)");
+
+			if (pos != std::string::npos) {
+				string.replace(pos, 3, "");
+			}
+		}
+
+		size_t pos = string.find("(");
+
+		return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+	}
+
+	template <typename Type>
+	struct is_function_object
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename Type>
+	struct is_function_object<std::function<Type>>
+	{
+		static constexpr bool value = true;
+	};
+
+	template <typename Type, class Enable = void>
+	struct has_call_operator;
+
+	template <typename Type>
+	struct has_call_operator<Type,
+		typename std::enable_if<std::is_class<Type>::value>::type>
+	{
+		typedef char no[1];
+		typedef char yes[2];
+
+		template <typename T>
+		static
+		yes& test(decltype(&T::operator()));
+
+		template <typename T>
+		static
+		no& test (...);
+
+		static constexpr bool value = sizeof(test<Type>(0)) == sizeof(yes);
+	};
+
+	template <typename Type>
+	struct has_call_operator<Type,
+		typename std::enable_if<!std::is_class<Type>::value>::type>
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename Type>
+	struct is_functor
+	{
+		static constexpr bool value = std::is_function<Type>::value ||
+		                              std::is_member_function_pointer<Type>::value ||
+		                              is_function_object<Type>::value ||
+		                              has_call_operator<Type>::value;
+	};
 
 	namespace _has_cout
 	{
@@ -332,6 +467,7 @@ namespace inspect
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_pointer<Type>::value &&
+		!is_functor<Type>::value &&
 		!is_raw_string<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
@@ -392,9 +528,57 @@ namespace inspect
 
 	template <typename Type>
 	static
+	typename std::enable_if<!has_to_string_method<Type>::value &&
+		!has_inspect_method<Type>::value &&
+		has_cout<Type>::value, std::string>::type
+	object (Type& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<" << type<Type>() << ": " << value << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<!has_to_string_method<Type>::value &&
+		!has_inspect_method<Type>::value &&
+		!has_cout<Type>::value, std::string>::type
+	object (Type& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<" << type<Type>() << ":" << &value << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<has_to_string_method<Type>::value &&
+		!has_inspect_method<Type>::value, std::string>::type
+	object (Type& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<" << type<Type>() << ": " << value.to_string() << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<has_inspect_method<Type>::value, std::string>::type
+	object (Type& value) noexcept
+	{
+		return value.inspect();
+	}
+
+	template <typename Type>
+	static
 	typename std::enable_if<std::is_class<Type>::value &&
+		!is_functor<Type>::value &&
 		!is_string<Type>::value &&
 		!has_to_string_method<Type>::value &&
+		!has_inspect_method<Type>::value &&
 		has_cout<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
@@ -407,36 +591,98 @@ namespace inspect
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_class<Type>::value &&
+		!is_functor<Type>::value &&
 		!is_string<Type>::value &&
 		!has_to_string_method<Type>::value &&
 		!has_inspect_method<Type>::value &&
 		!has_cout<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
-		std::stringstream ss(std::stringstream::out);
-		ss << "#<" << type<Type>() << ":" << &value << ">";
-
-		return ss.str();
+		return object<Type>(value);
 	}
 
 	template <typename Type>
 	static
-	typename std::enable_if<has_to_string_method<Type>::value &&
-		!has_inspect_method<Type>::value, std::string>::type
+	typename std::enable_if<std::is_class<Type>::value &&
+		!is_functor<Type>::value &&
+		!is_string<Type>::value &&
+		!has_inspect_method<Type>::value &&
+		has_to_string_method<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
-		std::stringstream ss(std::stringstream::out);
-		ss << "#<" << type<Type>() << ": " << value.to_string() << ">";
-
-		return ss.str();
+		return object<Type>(value);
 	}
 
 	template <typename Type>
 	static
-	typename std::enable_if<has_inspect_method<Type>::value, std::string>::type
+	typename std::enable_if<std::is_class<Type>::value &&
+		!is_functor<Type>::value &&
+		!is_string<Type>::value &&
+		has_inspect_method<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
 		return value.inspect();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<std::is_function<Type>::value, std::string>::type
+	value (Type* value) noexcept
+	{
+		auto strings = function<Type>();
+
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<function " << std::get<0>(strings) << std::get<1>(strings) << ": 0x" <<
+			std::hex << (intptr_t) value << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<std::is_member_function_pointer<Type>::value, std::string>::type
+	value (Type value) noexcept
+	{
+		(void) value;
+
+		auto strings = function<Type>();
+
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<function " << std::get<0>(strings) << std::get<1>(strings) << ": @" <<
+			std::get<2>(strings) << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<std::is_class<Type>::value &&
+		is_function_object<Type>::value, std::string>::type
+	value (Type& value) noexcept
+	{
+		auto strings = function<Type>();
+
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<function " << std::get<0>(strings) << std::get<1>(strings) << ": " <<
+			type<>(&value.target_type()) << ">";
+
+		return ss.str();
+	}
+
+	template <typename Type>
+	static
+	typename std::enable_if<std::is_class<Type>::value &&
+		!is_function_object<Type>::value &&
+		has_call_operator<Type>::value, std::string>::type
+	value (Type& value) noexcept
+	{
+		auto strings = function<Type>();
+
+		std::stringstream ss(std::stringstream::out);
+		ss << "#<function " << std::get<0>(strings) << std::get<1>(strings) << ": " <<
+			object<Type>(value) << ">";
+
+		return ss.str();
 	}
 
 	template <typename Type>
