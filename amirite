@@ -1275,7 +1275,7 @@ namespace ami
 			check();
 		}
 		catch (...) {
-			fail("expected nothing to be thrown, something was", "", loc);
+			fail("expected nothing to be thrown", "", loc);
 		}
 	}
 
@@ -1286,7 +1286,7 @@ namespace ami
 			check();
 		}
 		catch (...) {
-			fail("expected nothing to be thrown, something was", info, loc);
+			fail("expected nothing to be thrown", info, loc);
 		}
 	}
 
