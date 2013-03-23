@@ -1175,7 +1175,6 @@ namespace ami
 		if (f.str() != s.str()) {
 			fail("expected " + inspect::value(first) + " and " + inspect::value(second) + " to be similar", info, loc);
 		}
-
 	}
 
 #	define _amisimilar2(first, second) \
