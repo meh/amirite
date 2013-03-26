@@ -11,6 +11,7 @@
 #ifndef _AMIRITE_H
 #define _AMIRITE_H
 
+// inspect {{{
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -716,6 +717,7 @@ namespace inspect
 		return ss.str();
 	}
 }
+// }}}
 
 #include <vector>
 #include <functional>
