@@ -1010,7 +1010,7 @@ namespace ami
 			};
 
 		public:
-			test (suite& suite, std::string name, std::function<void(void)> check) : _suite(suite), _name(name), _check(check), _result(nullptr)
+			test (class suite& suite, std::string name, std::function<void(void)> check) : _suite(suite), _name(name), _check(check), _result(nullptr)
 			{}
 
 			~test (void)
