@@ -12,28 +12,48 @@
 #define _AMIRITE_H
 
 // inspect {{{
+#ifndef _INSPECT_H
+#define _INSPECT_H
+
+#include <cstdlib>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <limits>
 #include <type_traits>
-#include <typeinfo>
 #include <utility>
 #include <string>
 #include <functional>
 #include <cstring>
 #include <cwctype>
+#include <iterator>
+#include <tuple>
 
 #ifdef _MSC_VER
 #	define noexcept
 #	define constexpr const
 #endif
 
+#ifndef INSPECT_DEMANGLE
+#	define INSPECT_DEMANGLE 1
+#endif
+
+#if defined(_GXX_RTTI) || defined(_CPPRTTI)
+#	define _INSPECT_HAS_RTTI 1
+#	include <typeinfo>
+#elif defined(__clang__)
+#	if __has_feature(cxx_rtti)
+#		define _INSPECT_HAS_RTTI 1
+#		include <typeinfo>
+#	endif
+#endif
+
 namespace inspect
 {
-#	if defined(__clang__) || defined(__GNUC__) && !defined(NO_DEMANGLE)
+#	if defined(_INSPECT_HAS_RTTI) && defined(INSPECT_DEMANGLE) && (defined(__clang__) || defined(__GNUC__))
 #		include <cxxabi.h>
 
+		// Demangle the type with standard abi methods.
 		template <typename Type>
 		static
 		std::string
@@ -42,10 +62,10 @@ namespace inspect
 			std::string result;
 			int         status;
 			char*       demangled = abi::__cxa_demangle(info->name(),
-			                                              nullptr, nullptr, &status);
+			                                            nullptr, nullptr, &status);
 
 			result = demangled;
-			free(demangled);
+			std::free(demangled);
 
 			if (std::is_enum<Type>::value) {
 				result = "enum " + result;
@@ -56,10 +76,11 @@ namespace inspect
 
 			return result;
 		}
-#	elif defined(_MSC_VER) && !defined(NO_DEMANGLE)
+#	elif defined(_INSPECT_HAS_RTTI) && defined(INSPECT_DEMANGLE) && defined(_MSC_VER)
 #		include <Windows.h>
 #		include <Dbghelp.h>
 
+		// Demangle a type with the Windows debug helper.
 		template <typename Type>
 		static
 		std::string
@@ -71,7 +92,8 @@ namespace inspect
 
 			return demangled;
 		}
-#	else
+#	elif defined(_INSPECT_HAS_RTTI)
+		// No demangling.
 		template <typename Type>
 		static
 		std::string
@@ -81,12 +103,17 @@ namespace inspect
 		}
 #	endif
 
+	// Any type.
 	template <typename Type>
 	static
 	std::string
 	type (void) noexcept
 	{
-		return type<Type>(&typeid(Type));
+#		if defined(_INSPECT_HAS_RTTI)
+			return type<Type>(&typeid(Type));
+#		else
+			return "?";
+#		endif
 	}
 
 #	ifndef _MSC_VER
@@ -108,10 +135,14 @@ namespace inspect
 		function (void)
 		{
 			std::string string = type<Function>();
+			auto        pos    = string.find("(");
 
-			size_t pos = string.find("(");
-
-			return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+			if (pos != std::string::npos) {
+				return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+			}
+			else {
+				return std::make_tuple("?", "?", "");
+			}
 		}
 
 		template <typename Function>
@@ -122,26 +153,32 @@ namespace inspect
 		{
 			std::string string = type<Function>();
 
-			std::string return_value;
+			std::string return_value = "?";
 			{
-				size_t pos = string.find("(");
+				auto pos = string.find("(");
 
-				return_value = string.substr(0, pos - 1);
+				if (pos != std::string::npos) {
+					return_value = string.substr(0, pos - 1);
+				}
 			}
 
-			std::string klass;
+			std::string klass = "?";
 			{
-				size_t pos  = string.find("(");
-				size_t pos2 = string.find(":", pos);
+				auto pos  = string.find("(");
+				auto pos2 = string.find(":", pos);
 
-				klass = string.substr(pos + 1, pos2 - pos - 1);
+				if (pos != std::string::npos) {
+					klass = string.substr(pos + 1, pos2 - pos - 1);
+				}
 			}
 
-			std::string arguments;
+			std::string arguments = "?";
 			{
-				size_t pos = string.find(")");
+				auto pos = string.find(")");
 
-				arguments = string.substr(pos + 1);
+				if (pos != std::string::npos) {
+					arguments = string.substr(pos + 1);
+				}
 			}
 
 			return std::make_tuple(return_value, arguments, klass);
@@ -155,16 +192,21 @@ namespace inspect
 		{
 			std::string string = type<typename function_traits<Function>::pointer>();
 			{
-				size_t pos = string.find("(*)");
+				auto pos = string.find("(*)");
 
 				if (pos != std::string::npos) {
 					string.replace(pos, 3, "");
 				}
 			}
 
-			size_t pos = string.find("(");
+			auto pos = string.find("(");
 
-			return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+			if (pos != std::string::npos) {
+				return std::make_tuple(string.substr(0, pos - 1), string.substr(pos), "");
+			}
+			else {
+				return std::make_tuple("?", "?", "");
+			}
 		}
 #	endif
 
@@ -180,7 +222,49 @@ namespace inspect
 		static constexpr bool value = true;
 	};
 
-	template <typename Type, class Enable = void>
+	template <typename T, typename = void>
+	struct is_iterator
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename T>
+	struct is_iterator<T, typename std::enable_if<!std::is_same<typename std::iterator_traits<T>::value_type, void>::value>::type>
+	{
+		static constexpr bool value = true;
+	};
+
+	template <typename T, typename = void>
+	struct has_iterator
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename T>
+	struct has_iterator<T, typename std::enable_if<is_iterator<typename T::iterator>::value, void>::type>
+	{
+		static constexpr bool value = true;
+	};
+
+	template <typename... T>
+	struct is_tuple
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename... Types>
+	struct is_tuple<std::tuple<Types...>>
+	{
+		static constexpr bool value = true;
+	};
+
+	template <typename First, typename Second>
+	struct is_tuple<std::pair<First, Second>>
+	{
+		static constexpr bool value = true;
+	};
+
+	template <typename Type, class = void>
 	struct has_call_operator;
 
 	template <typename Type>
@@ -251,7 +335,7 @@ namespace inspect
 	struct has_cout : _has_cout::has_cout<Type>
 	{};
 
-	template <typename Type, class Enable = void>
+	template <typename Type, class = void>
 	struct has_to_string_method;
 
 	template <typename Type>
@@ -287,7 +371,7 @@ namespace inspect
 		static constexpr bool value = false;
 	};
 
-	template <typename Type, class Enable = void>
+	template <typename Type, class = void>
 	struct has_inspect_method;
 
 	template <typename Type>
@@ -352,6 +436,7 @@ namespace inspect
 			 std::is_same<type, char32_t>::value);
 	};
 
+	// String.
 	template <typename Type>
 	static
 	typename std::enable_if<is_raw_string<Type>::value &&
@@ -395,6 +480,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Wide string.
 	template <typename Type>
 	static
 	typename std::enable_if<is_raw_string<Type>::value &&
@@ -440,6 +526,7 @@ namespace inspect
 	// TODO: implement std::u16string inspection
 	// TODO: implement std::u32string inspection
 
+	// std::string
 	template <typename Type>
 	static
 	typename std::enable_if<is_string<Type>::value, Type>::type
@@ -448,6 +535,7 @@ namespace inspect
 		return inspect::value(value.data(), value.size());
 	}
 
+	// Integer.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_fundamental<Type>::value &&
@@ -460,6 +548,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Float.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_fundamental<Type>::value &&
@@ -472,6 +561,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Pointer.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_pointer<Type>::value &&
@@ -485,6 +575,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Enum with custom std::cout.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_enum<Type>::value &&
@@ -497,6 +588,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Enum.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_enum<Type>::value &&
@@ -510,6 +602,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Union with custom std::cout.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_union<Type>::value &&
@@ -522,6 +615,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Union.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_union<Type>::value &&
@@ -534,6 +628,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Objects without #inspect or #to_string and a custom std::cout.
 	template <typename Type>
 	static
 	typename std::enable_if<!has_to_string_method<Type>::value &&
@@ -547,6 +642,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Any object.
 	template <typename Type>
 	static
 	typename std::enable_if<!has_to_string_method<Type>::value &&
@@ -560,6 +656,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Objects with #to_string but no #inspect.
 	template <typename Type>
 	static
 	typename std::enable_if<has_to_string_method<Type>::value &&
@@ -572,6 +669,7 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Objects with #inspect.
 	template <typename Type>
 	static
 	typename std::enable_if<has_inspect_method<Type>::value, std::string>::type
@@ -580,6 +678,7 @@ namespace inspect
 		return value.inspect();
 	}
 
+	// Values with a custom std::cout.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_class<Type>::value &&
@@ -596,11 +695,14 @@ namespace inspect
 		return ss.str();
 	}
 
+	// Any object.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_class<Type>::value &&
 		!is_functor<Type>::value &&
 		!is_string<Type>::value &&
+		!is_tuple<Type>::value &&
+		!has_iterator<Type>::value &&
 		!has_to_string_method<Type>::value &&
 		!has_inspect_method<Type>::value &&
 		!has_cout<Type>::value, std::string>::type
@@ -609,6 +711,7 @@ namespace inspect
 		return object<Type>(value);
 	}
 
+	// Objects with #to_string.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_class<Type>::value &&
@@ -621,6 +724,7 @@ namespace inspect
 		return object<Type>(value);
 	}
 
+	// Objects with #inspect.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_class<Type>::value &&
@@ -633,6 +737,7 @@ namespace inspect
 	}
 
 #	ifndef _MSC_VER
+		// Function pointer.
 		template <typename Type>
 		static
 		typename std::enable_if<std::is_function<Type>::value, std::string>::type
@@ -647,6 +752,7 @@ namespace inspect
 			return ss.str();
 		}
 
+		// Function pointer to a method.
 		template <typename Type>
 		static
 		typename std::enable_if<std::is_member_function_pointer<Type>::value, std::string>::type
@@ -663,6 +769,7 @@ namespace inspect
 			return ss.str();
 		}
 
+		// std::function
 		template <typename Type>
 		static
 		typename std::enable_if<std::is_class<Type>::value &&
@@ -672,12 +779,19 @@ namespace inspect
 			auto strings = function<Type>();
 
 			std::stringstream ss(std::stringstream::out);
-			ss << "#<function " << std::get<0>(strings) << std::get<1>(strings) << ": " <<
-				type<void>(&value.target_type()) << ">";
+
+			ss << "#<function " << std::get<0>(strings) << std::get<1>(strings);
+
+#			if defined(_INSPECT_HAS_RTTI)
+				ss << ": " << type<void>(&value.target_type());
+#			endif
+				
+			ss << ">";
 
 			return ss.str();
 		}
 
+		// Any object with a call operator.
 		template <typename Type>
 		static
 		typename std::enable_if<std::is_class<Type>::value &&
@@ -696,6 +810,7 @@ namespace inspect
 		}
 #	endif
 
+	// Any array that is not a string.
 	template <typename Type>
 	static
 	typename std::enable_if<std::is_array<Type>::value &&
@@ -716,10 +831,83 @@ namespace inspect
 
 		return ss.str();
 	}
+
+	// Any iterable value.
+	template <typename Type>
+	static
+	typename std::enable_if<has_iterator<Type>::value &&
+		!is_string<Type>::value, std::string>::type
+	value (Type& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+
+		ss << "[";
+		for (auto & item : value) {
+			ss << inspect::value(item);
+			ss << ", ";
+		}
+		ss.seekp(-2, std::ios_base::end);
+		ss << "]";
+
+		return ss.str();
+	}
+
+	// Pair.
+	template <typename First, typename Second>
+	static
+	std::string
+	value (std::pair<First, Second>& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+
+		ss << "(";
+		ss << inspect::value(value.first) << ", ";
+		ss << inspect::value(value.second);
+		ss << ")";
+
+		return ss.str();
+	}
+
+	template <std::size_t I = 0, typename... Types>
+	static inline
+	typename std::enable_if<I == sizeof...(Types), void>::type
+	_tuple(std::ostream& out, std::tuple<Types...>& t)
+	{
+	}
+
+	template <std::size_t I = 0, typename... Types>
+	static inline
+	typename std::enable_if<I<sizeof...(Types), void>::type
+	_tuple(std::ostream& out, std::tuple<Types...>& t)
+	{
+		out << std::get<I>(t) << ", ";
+		_tuple<I + 1, Types...>(out, t);
+	}	
+
+	// Tuple.
+	template <typename... Types>
+	static
+	std::string
+	value (std::tuple<Types...>& value) noexcept
+	{
+		std::stringstream ss(std::stringstream::out);
+
+		ss << "(";
+		_tuple(ss, value);
+		ss.seekp(-2, std::ios_base::end);
+		ss << ")";
+
+		return ss.str();
+	}
 }
+
+#endif
 // }}}
 
 // iocolor {{{
+#ifndef _IOCOLOR_H
+#define _IOCOLOR_H
+	
 #include <iostream>
 #include <unistd.h>
 
@@ -919,6 +1107,8 @@ operator << (std::ostream& o, enum iocolor::effect ef)
 
 	return o;
 }
+
+#endif
 // }}}
 
 #include <vector>
