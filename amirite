@@ -1391,6 +1391,8 @@ namespace ami
 			else {
 				std::cout << "Running tests in " << s.name() << ": ";
 			}
+
+			std::cout << std::endl;
 		}
 
 		void
@@ -1399,7 +1401,8 @@ namespace ami
 			t.run();
 
 			if (t.failed()) {
-				std::cout << t.suite().name() << "/" << t.name();
+				std::cout << iocolor::color::red;
+				std::cout << "\t" << t.suite().name() << "/" << t.name();
 				if (!t.location().empty()) {
 					std::cout << " (" << t.location().file << ":" << t.location().line << ")";
 				}
@@ -1411,7 +1414,12 @@ namespace ami
 				}
 				std::cout << std::endl;
 
-				std::cout << std::endl;
+				std::cout << iocolor::color::reset << std::endl;
+			}
+			else {
+				std::cout << iocolor::color::green;
+				std::cout << "\t" << t.suite().name() << "/" << t.name();
+				std::cout << iocolor::color::reset << std::endl;
 			}
 		}
 
@@ -1711,6 +1719,8 @@ namespace ami
 int
 amirite (ami::suite suite)
 {
+	ami::printer::prelude(suite);
+
 	for (auto& test : suite) {
 		ami::printer::standard(test);
 	}
