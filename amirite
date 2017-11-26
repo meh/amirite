@@ -871,7 +871,7 @@ namespace inspect
 	template <std::size_t I = 0, typename... Types>
 	static inline
 	typename std::enable_if<I == sizeof...(Types), void>::type
-	_tuple(std::ostream& out, std::tuple<Types...>& t)
+	_tuple(std::ostream&, std::tuple<Types...>&)
 	{
 	}
 
