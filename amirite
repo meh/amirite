@@ -686,6 +686,7 @@ namespace inspect
 		!is_string<Type>::value &&
 		!has_to_string_method<Type>::value &&
 		!has_inspect_method<Type>::value &&
+		!has_iterator<Type>::value &&
 		has_cout<Type>::value, std::string>::type
 	value (Type& value) noexcept
 	{
